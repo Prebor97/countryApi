@@ -1,6 +1,7 @@
 package com.prebor.countryApi.service;
 
 import com.prebor.countryApi.dto.CountryApiDto;
+import com.prebor.countryApi.dto.ErrorResponse;
 import com.prebor.countryApi.dto.ExchangeRateResponse;
 import com.prebor.countryApi.entity.Country;
 import com.prebor.countryApi.repository.CountryRepository;
@@ -31,7 +32,7 @@ public class CountryService {
         this.repository = repository;
     }
 
-    public ResponseEntity<String> refreshCountryData() {
+    public ResponseEntity<?> refreshCountryData() {
         String countriesUrl = "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies";
         String exchangeUrl = "https://open.er-api.com/v6/latest/USD";
 
@@ -44,12 +45,12 @@ public class CountryService {
                 exchangeRates = restTemplate.getForObject(exchangeUrl, ExchangeRateResponse.class);
             } catch (RestClientException e) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body("Failed to fetch data from external APIs. Please try again later.");
+                        .body(new ErrorResponse("Failed to fetch data from external APIs. Please try again later."));
             }
 
             if (countries == null || exchangeRates == null) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body("External API returned no data. Please try again later.");
+                        .body(new ErrorResponse("External API returned no data. Please try again later."));
             }
 
             try {
@@ -64,16 +65,15 @@ public class CountryService {
                 }
                 generateSummaryImage();
                 return ResponseEntity.status(HttpStatus.CREATED)
-                        .body("Country data successfully refreshed");
+                        .body(new ErrorResponse("Country data successfully refreshed"));
             } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("An error occurred while saving country data: " + e.getMessage());
+                        .body(new ErrorResponse("An error occurred while saving country data: " + e.getMessage()));
             }
 
         } catch (Exception e) {
-            // Catch any other unexpected runtime errors
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("An unexpected error occurred: " + e.getMessage());
+                    .body(new ErrorResponse("An unexpected error occurred: " + e.getMessage()));
         }
     }
     public ResponseEntity<?> getCountries(String region, String currencyCode, String sort){
@@ -101,22 +101,15 @@ public class CountryService {
                                 Comparator.nullsLast(Double::compareTo)
                         ).reversed())
                         .collect(Collectors.toList());
-            } else if ("gdp_asc".equalsIgnoreCase(sort)) {
-                countries = countries.stream()
-                        .sorted(Comparator.comparing(
-                                Country::getEstimatedGdp,
-                                Comparator.nullsLast(Double::compareTo)
-                        ))
-                        .collect(Collectors.toList());
             } else {
                 return ResponseEntity.badRequest().body(Map.of(
-                        "error", "Invalid sort parameter. Allowed values: gdp_asc, gdp_desc"
+                        "error", "Invalid sort parameter. Allowed values: gdp_desc"
                 ));
             }
         }
 
         if (countries.isEmpty()) {
-            return ResponseEntity.status(404).body("No countries found matching your filters.");
+            return ResponseEntity.status(404).body(new ErrorResponse("No countries found matching your filters."));
         }
 
         return ResponseEntity.ok(countries);
@@ -124,7 +117,7 @@ public class CountryService {
 
     public ResponseEntity<?> getCountryByName(String name){
         if (name == null || name.isBlank()) {
-            return ResponseEntity.badRequest().body("Country name is required.");
+            return ResponseEntity.badRequest().body(new ErrorResponse("Country name is required."));
         }
 
         Country country = repository.findAll().stream()
@@ -133,7 +126,7 @@ public class CountryService {
                 .orElse(null);
 
         if (country == null) {
-            return ResponseEntity.status(404).body("Country with name '" + name + "' not found.");
+            return ResponseEntity.status(404).body(new ErrorResponse("Country with name '" + name + "' not found."));
         }
 
         return ResponseEntity.ok(country);
@@ -141,7 +134,7 @@ public class CountryService {
 
     public ResponseEntity<?> deleteCountryByName(String name){
         if (name == null || name.isBlank()) {
-            return ResponseEntity.badRequest().body("Country name is required.");
+            return ResponseEntity.badRequest().body(new ErrorResponse("Country name is required."));
         }
 
         Country country = repository.findAll().stream()
@@ -150,11 +143,10 @@ public class CountryService {
                 .orElse(null);
 
         if (country == null) {
-            return ResponseEntity.status(404).body("Country with name '" + name + "' not found.");
+            return ResponseEntity.status(404).body(new ErrorResponse("Country with name '" + name + "' not found."));
         }
-
         repository.delete(country);
-        return ResponseEntity.ok("Country '" + country.getName() + "' has been deleted successfully.");
+        return ResponseEntity.ok(new ErrorResponse("Country '" + country.getName() + "' has been deleted successfully."));
     }
 
     public ResponseEntity<?> getStatus(){
@@ -266,5 +258,4 @@ public class CountryService {
             System.err.println("Failed to generate summary image: " + e.getMessage());
         }
     }
-
 }
